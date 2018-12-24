@@ -32,6 +32,7 @@ import com.digitaldan.harmony.messages.ConfigMessage;
 import com.digitaldan.harmony.messages.DigestMessage;
 import com.digitaldan.harmony.messages.DiscoveryMessage.DiscoveryRequestMessage;
 import com.digitaldan.harmony.messages.DiscoveryMessage.DiscoveryResponseMessage;
+import com.digitaldan.harmony.messages.ErrorResponseMessage;
 import com.digitaldan.harmony.messages.GetCurrentActivityMessage;
 import com.digitaldan.harmony.messages.HoldActionMessage;
 import com.digitaldan.harmony.messages.HoldActionMessage.HoldStatus;
@@ -117,9 +118,10 @@ public class HarmonyClient {
 
     public CompletableFuture<Activity> getCurrentActivity() {
         final CompletableFuture<Activity> future = new CompletableFuture<Activity>();
-        if (currentActivity == null) {
+        if (this.currentActivity == null) {
             sendMessage(new GetCurrentActivityMessage.GetCurrentActivityRequestMessage()).thenAccept(m -> {
-                this.currentActivity = ((GetCurrentActivityMessage.GetCurrentActivityResponseMessage) m).getActivity();
+                int activityId = ((GetCurrentActivityMessage.GetCurrentActivityResponseMessage) m).getActivityId();
+                this.currentActivity = this.cachedConfig.getActivityById(activityId);
                 future.complete(this.currentActivity);
             });
         } else {
@@ -158,15 +160,15 @@ public class HarmonyClient {
     public CompletableFuture<?> pressButton(int deviceId, String button, int timeMillis) {
         final CompletableFuture<?> future = new CompletableFuture<>();
 
-        sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS))
-                .thenAccept(m -> {
+        sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS,
+                System.currentTimeMillis() - connectedTime)).thenAccept(m -> {
                     try {
                         Thread.sleep(timeMillis);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
-                    sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS))
-                            .thenAccept(mm -> {
+                    sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS,
+                            System.currentTimeMillis() - connectedTime)).thenAccept(mm -> {
                                 future.complete(null);
 
                             });
@@ -309,6 +311,17 @@ public class HarmonyClient {
                 if (future != null) {
                     logger.info("Calling for future for ID {} ", rm.getId());
                     future.complete(rm);
+                }
+            }
+
+            if (m instanceof ErrorResponseMessage) {
+                ResponseMessage rm = (ResponseMessage) m;
+                logger.info("Error Resposne: Looking for future for ID {} ", rm.getId());
+                CompletableFuture<ResponseMessage> future = responseFutures.remove(rm.getId());
+                if (future != null) {
+                    logger.info("Error Resposne:  Calling for future for ID {} ", rm.getId());
+                    future.completeExceptionally(
+                            new Exception(String.format("Error Code %d : %s", rm.getCode(), rm.getMsg())));
                 }
             }
 

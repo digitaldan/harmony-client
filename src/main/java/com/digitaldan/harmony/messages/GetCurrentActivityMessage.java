@@ -3,7 +3,6 @@ package com.digitaldan.harmony.messages;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.digitaldan.harmony.config.Activity;
 import com.google.gson.annotations.SerializedName;
 
 public class GetCurrentActivityMessage {
@@ -28,15 +27,23 @@ public class GetCurrentActivityMessage {
     public static class GetCurrentActivityResponseMessage extends ResponseMessage {
 
         @SerializedName("data")
-        private Activity activity;
+        private CurrentActivityResult currentActivityResult;
 
-        public GetCurrentActivityResponseMessage(int code, String id, String msg, Activity activity) {
+        public GetCurrentActivityResponseMessage(int code, String id, String msg) {
             super(code, id, msg);
-            this.activity = activity;
         }
 
-        public Activity getActivity() {
-            return activity;
+        public int getActivityId() {
+            try {
+                return Integer.parseInt(currentActivityResult.result);
+            } catch (Exception e) {
+                return -1;
+            }
+        }
+
+        private class CurrentActivityResult {
+            private String result;
+
         }
     }
 }

@@ -47,6 +47,11 @@ public class MessageDeserializer implements JsonDeserializer<Message> {
                 return context.deserialize(jsonObject, clazz);
             }
         }
+
+        JsonElement code = jsonObject.get("code");
+        if (code != null && code.getAsInt() != 200) {
+            return context.deserialize(jsonObject, ErrorResponseMessage.class);
+        }
         return null;
     }
 }

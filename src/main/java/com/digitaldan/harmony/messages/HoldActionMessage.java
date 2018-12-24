@@ -16,11 +16,16 @@ public class HoldActionMessage {
 
         HashMap<String, Object> params = new HashMap<>();
 
-        public HoldActionRequestMessage(int deviceId, String button, HoldStatus status) {
+        public HoldActionRequestMessage(int deviceId, String button, HoldStatus status, long timestamp) {
             super(MIME_TYPE);
-            params.put("deviceId", deviceId);
-            params.put("button", button);
-            params.put("status", HoldStatus.PRESS.name().toLowerCase());
+            HashMap<String, Object> action = new HashMap<>();
+            action.put("type", "IRCommand");
+            action.put("deviceId", String.valueOf(deviceId));
+            action.put("command", button);
+
+            params.put("action", action);
+            params.put("status", status.toString().toLowerCase());
+            params.put("timestamp", timestamp);
         }
 
         @Override

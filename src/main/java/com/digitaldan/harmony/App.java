@@ -4,7 +4,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
+import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,12 +20,13 @@ import com.digitaldan.harmony.shell.ShellCommandWrapper;
 import com.martiansoftware.jsap.CommandLineTokenizer;
 
 /**
- * Hello world!
+ * Sample App
  *
  */
 public class App implements HarmonyClientListener {
     private final Logger logger = LoggerFactory.getLogger(App.class);
     private HarmonyClient hc;
+    private ScheduledFuture<?> ping;
 
     public static void main(String[] args) {
         try {
@@ -36,8 +41,10 @@ public class App implements HarmonyClientListener {
             hc = new HarmonyClient();
             hc.addListener(this);
             hc.connect(host);
+
         } catch (Exception e) {
             logger.error("error connecting to Hub", e);
+            System.exit(-1);
         }
 
         final BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
@@ -51,15 +58,27 @@ public class App implements HarmonyClientListener {
 
             try {
                 String[] lineArgs = CommandLineTokenizer.tokenize(line);
+                if (lineArgs.length == 0) {
+                    continue;
+                }
                 ShellCommandWrapper command = new ShellCommandWrapper();
                 new CmdLineParser(command).parseArgument(lineArgs);
                 command.execute(hc);
+            } catch (CmdLineException e) {
+                System.err
+                        .println(e.getMessage() + "\n" + "list devices - lists the configured devices and their id's\n"
+                                + "list activities - lists the configured activities and their id's\n"
+                                + "show activity - shows the current activity\n"
+                                + "start <activity> - starts an activity (takes a string or id)\n"
+                                + "press <device> <button> - perform a single button press\n"
+                                + "get_config - Dumps the full config json, unformatted\n");
+
             } catch (Exception e) {
                 e.printStackTrace(System.err);
                 System.err.println("\n");
             }
         }
-
+        ping.cancel(true);
         br.close();
         System.exit(0);
     }
@@ -87,15 +106,11 @@ public class App implements HarmonyClientListener {
             logger.info("ACTIVITY RECIEVED {}", a);
         });
 
-        /**
-         *
-         * Power everything off
-         */
-        CompletableFuture<?> startFuture = hc.startActivity(-1);
-        startFuture.thenAccept(m -> {
-            logger.info("ACTIVITY Started {}", m);
-        });
-
+        ping = Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+            hc.sendPing().thenAccept(m -> {
+                logger.info("PONG");
+            });
+        }, 0, 30, TimeUnit.SECONDS);
     }
 
     @Override

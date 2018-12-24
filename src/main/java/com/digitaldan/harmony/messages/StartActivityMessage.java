@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class StartActivityMessage {
-    public static final String MIME_TYPE = "vnd.logitech.harmony/vnd.logitech.harmony.engine?startactivity";
+    public static final String MIME_TYPE = "harmony.activityengine?runactivity";
 
     public static class StartActivityRequestMessage extends RequestMessage {
 
@@ -12,8 +12,11 @@ public class StartActivityMessage {
 
         public StartActivityRequestMessage(int activityId, long timeStamp) {
             super(MIME_TYPE);
-            params.put("activityId", activityId);
+            HashMap<String, Object> args = new HashMap<>();
+            args.put("rule", "start");
+            params.put("activityId", String.valueOf(activityId));
             params.put("timeStamp", timeStamp);
+            params.put("args", args);
         }
 
         @Override

@@ -38,9 +38,4 @@ public class ConfigMessage {
 
     }
 
-    // @Override
-    // public ConfigResponseMessage fromJsonElement(int code, String id, String msg, JsonElement data) {
-    // Gson gson = new Gson();
-    // return new ConfigResponseMessage(code, id, msg, gson.fromJson(data, HarmonyConfig.class));
-    // }
 }
