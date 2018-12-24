@@ -214,7 +214,9 @@ public class HarmonyClient {
         }
         final String id = message.getId();
         final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
-        session.getRemote().sendString(message.toJson(), new WriteCallback() {
+        String json = message.toJson();
+        logger.info(json);
+        session.getRemote().sendString(json, new WriteCallback() {
             @Override
             public void writeSuccess() {
                 logger.debug("writeSuccess for id {}", id);

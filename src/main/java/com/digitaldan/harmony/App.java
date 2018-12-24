@@ -35,6 +35,7 @@ public class App implements HarmonyClientListener {
         try {
             hc = new HarmonyClient();
             hc.addListener(this);
+            hc.connect(host);
         } catch (Exception e) {
             logger.error("error connecting to Hub", e);
         }
