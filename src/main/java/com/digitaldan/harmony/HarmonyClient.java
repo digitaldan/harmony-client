@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import com.digitaldan.harmony.config.Activity;
 import com.digitaldan.harmony.config.Activity.Status;
+import com.digitaldan.harmony.config.Device;
 import com.digitaldan.harmony.config.Discovery;
 import com.digitaldan.harmony.config.HarmonyConfig;
 import com.digitaldan.harmony.messages.ActivityFinishedMessage;
@@ -32,6 +33,8 @@ import com.digitaldan.harmony.messages.DigestMessage;
 import com.digitaldan.harmony.messages.DiscoveryMessage.DiscoveryRequestMessage;
 import com.digitaldan.harmony.messages.DiscoveryMessage.DiscoveryResponseMessage;
 import com.digitaldan.harmony.messages.GetCurrentActivityMessage;
+import com.digitaldan.harmony.messages.HoldActionMessage;
+import com.digitaldan.harmony.messages.HoldActionMessage.HoldStatus;
 import com.digitaldan.harmony.messages.Message;
 import com.digitaldan.harmony.messages.MessageDeserializer;
 import com.digitaldan.harmony.messages.PingMessage;
@@ -41,7 +44,7 @@ import com.digitaldan.harmony.messages.StartActivityMessage;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-public class HarmonyClient implements WebSocketListener {
+public class HarmonyClient {
     private final Logger logger = LoggerFactory.getLogger(HarmonyClient.class);
     private Gson gson = new GsonBuilder().registerTypeAdapter(Message.class, new MessageDeserializer()).create();
     private ConcurrentHashMap<String, CompletableFuture<ResponseMessage>> responseFutures = new ConcurrentHashMap<>();
@@ -52,6 +55,10 @@ public class HarmonyClient implements WebSocketListener {
     private Activity currentActivity;
     private long connectedTime = System.currentTimeMillis();
     private HttpClient httpClient;
+
+    /*
+     * Public Methods
+     */
 
     public HarmonyClient() throws Exception {
         httpClient = new HttpClient();
@@ -104,172 +111,9 @@ public class HarmonyClient implements WebSocketListener {
         }
     }
 
-    private void connectWebsocket(String host, String hubId) throws IOException {
-        URI uri;
-        try {
-            uri = new URI(String.format("ws://%s:8088/?domain=svcs.myharmony.com&hubId=%s", host, hubId));
-        } catch (URISyntaxException e) {
-            throw new IOException(e.getMessage());
-        }
-
-        client = new WebSocketClient(httpClient);
-
-        try {
-            client.start();
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-            logger.error("Could not start web socket connection to hub {}", e);
-            throw new IOException(e.getMessage());
-        }
-
-        client.connect(this, uri);
-    }
-
-    @Override
-    public void onWebSocketClose(int code, String reason) {
-        logger.info("onWebSocketClose {} {} ", code, reason);
-        for (HarmonyClientListener listener : listeners) {
-            if (listener != null) {
-                listener.hubDisconnected(reason);
-            }
-        }
-        Iterator<String> it = responseFutures.keySet().iterator();
-        while (it.hasNext()) {
-            String key = it.next();
-            responseFutures.remove(key).completeExceptionally(new IOException("Connection Closed"));
-        }
-    }
-
-    @Override
-    public void onWebSocketConnect(Session session) {
-        logger.info("onWebSocketConnect {}", session);
-        connectedTime = System.currentTimeMillis();
-        this.session = session;
-        getHarmonyConfig().thenAccept(m -> {
-            for (HarmonyClientListener listener : listeners) {
-                if (listener != null) {
-                    listener.hubConnected();
-                }
-            }
-        });
-        getCurrentActivity();
-    }
-
-    @Override
-    public void onWebSocketError(Throwable error) {
-        logger.error("onWebSocketError", error);
-    }
-
-    @Override
-    public void onWebSocketBinary(byte[] data, int offset, int len) {
-        logger.info("onWebSocketBinary {} {} {} ", data, offset, len);
-    }
-
-    @Override
-    public void onWebSocketText(String message) {
-        logger.info("onWebSocketText {}", message);
-        Message m = gson.fromJson(message, Message.class);
-
-        if (m == null) {
-            return;
-        }
-
-        if (m instanceof ResponseMessage) {
-            ResponseMessage rm = (ResponseMessage) m;
-            logger.info("Looking for future for ID {} ", rm.getId());
-            CompletableFuture<ResponseMessage> future = responseFutures.remove(rm.getId());
-            if (future != null) {
-                logger.info("Calling for future for ID {} ", rm.getId());
-                future.complete(rm);
-            }
-        }
-
-        if (m instanceof ActivityFinishedMessage) {
-            if (cachedConfig != null) {
-                ActivityFinishedMessage af = (ActivityFinishedMessage) m;
-                logger.info("ActivityFinishedMessage {}", af.getActivityFinished().getActivityId());
-                Activity activity = cachedConfig.getActivityById(af.getActivityFinished().getActivityId());
-
-                if (currentActivity != activity) {
-                    currentActivity = activity;
-                    for (HarmonyClientListener listener : listeners) {
-                        if (listener != null) {
-                            listener.activityStarted(this.currentActivity);
-                        }
-                    }
-                }
-            }
-        }
-
-        if (m instanceof DigestMessage) {
-            boolean newStatus = false;
-            DigestMessage dm = (DigestMessage) m;
-            Status status = dm.getDigest().getActivityStatus();
-            Activity activity = cachedConfig.getActivityById(dm.getDigest().getActivityId());
-            logger.info("DigestMessage {}", activity.getId());
-            if (status == Status.HUB_IS_OFF) {
-                // HUB_IS_OFF is a special status received on PowerOff activity only,
-                // but it affects the status of all activities
-                for (Activity act : cachedConfig.getActivities()) {
-                    if (act.getStatus() != status) {
-                        newStatus = true;
-                        act.setStatus(status);
-                    }
-                }
-            } else if (status != Status.UNKNOWN && status != activity.getStatus()) {
-                newStatus = true;
-                activity.setStatus(status);
-            }
-            // inform listeners only if status was changed - avoid duplicate notifications
-            if (newStatus) {
-                for (HarmonyClientListener listener : listeners) {
-                    logger.debug("status listener[{}] notified: {} - {}", listener, activity, status);
-                    listener.activityStatusChanged(activity, status);
-                }
-            }
-        }
-    }
-
-    CompletableFuture<ResponseMessage> sendMessage(RequestMessage message) {
-        if (session == null) {
-            return null;
-        }
-        final String id = message.getId();
-        final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
-        session.getRemote().sendString(message.toJson(), new WriteCallback() {
-            @Override
-            public void writeSuccess() {
-                logger.debug("writeSuccess for id {}", id);
-                responseFutures.put(id, future);
-            }
-
-            @Override
-            public void writeFailed(Throwable t) {
-                future.completeExceptionally(t);
-            }
-        });
-        return future;
-    }
-
     public CompletableFuture<?> sendPing() {
         return sendMessage(new PingMessage.PingRequestMessage());
     }
-    //
-    // public CompletableFuture<PingResponseMessage> pressButton(int deviceId, String button) {
-    // return null;
-    // }
-    //
-    // public CompletableFuture<PingResponseMessage> pressButton(int deviceId, String button, int pressTime) {
-    // return null;
-    // }
-    //
-    // public CompletableFuture<PingResponseMessage> pressButton(String deviceName, String button) {
-    // return null;
-    // }
-    //
-    // public CompletableFuture<PingResponseMessage> pressButton(String deviceName, String button, int pressTime) {
-    // return null;
-    // }
 
     public CompletableFuture<Activity> getCurrentActivity() {
         final CompletableFuture<Activity> future = new CompletableFuture<Activity>();
@@ -311,12 +155,205 @@ public class HarmonyClient implements WebSocketListener {
         return null;
     }
 
-    public CompletableFuture<HarmonyConfig> getHarmonyConfig() {
+    public CompletableFuture<?> pressButton(int deviceId, String button, int timeMillis) {
+        final CompletableFuture<?> future = new CompletableFuture<>();
+
+        sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS))
+                .thenAccept(m -> {
+                    try {
+                        Thread.sleep(timeMillis);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS))
+                            .thenAccept(mm -> {
+                                future.complete(null);
+
+                            });
+                });
+
+        return future;
+    }
+
+    public CompletableFuture<?> pressButton(int deviceId, String button) {
+        return pressButton(deviceId, button, 200);
+    }
+
+    public CompletableFuture<?> pressButton(String deviceName, String button) {
+        Device device = cachedConfig.getDeviceByName(deviceName);
+        if (device == null) {
+            throw new IllegalArgumentException(String.format("Unknown device '%s'", deviceName));
+        }
+        return pressButton(device.getId(), button);
+    }
+
+    public CompletableFuture<?> pressButton(String deviceName, String button, int pressTime) {
+        Device device = cachedConfig.getDeviceByName(deviceName);
+        if (device == null) {
+            throw new IllegalArgumentException(String.format("Unknown device '%s'", deviceName));
+        }
+        return pressButton(device.getId(), button, pressTime);
+    }
+
+    public CompletableFuture<HarmonyConfig> getConfig() {
         final CompletableFuture<HarmonyConfig> future = new CompletableFuture<HarmonyConfig>();
         sendMessage(new ConfigMessage.ConfigRequestMessage()).thenAccept(m -> {
             this.cachedConfig = ((ConfigMessage.ConfigResponseMessage) m).getHarmonyConfig();
             future.complete(this.cachedConfig);
         });
         return future;
+    }
+
+    /*
+     * Private Methods
+     */
+
+    CompletableFuture<ResponseMessage> sendMessage(RequestMessage message) {
+        if (session == null) {
+            return null;
+        }
+        final String id = message.getId();
+        final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
+        session.getRemote().sendString(message.toJson(), new WriteCallback() {
+            @Override
+            public void writeSuccess() {
+                logger.debug("writeSuccess for id {}", id);
+                responseFutures.put(id, future);
+            }
+
+            @Override
+            public void writeFailed(Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+        return future;
+    }
+
+    private void connectWebsocket(String host, String hubId) throws IOException {
+        URI uri;
+        try {
+            uri = new URI(String.format("ws://%s:8088/?domain=svcs.myharmony.com&hubId=%s", host, hubId));
+        } catch (URISyntaxException e) {
+            throw new IOException(e.getMessage());
+        }
+
+        client = new WebSocketClient(httpClient);
+
+        try {
+            client.start();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            logger.error("Could not start web socket connection to hub {}", e);
+            throw new IOException(e.getMessage());
+        }
+
+        client.connect(new MyWebSocketListener(), uri);
+    }
+
+    private class MyWebSocketListener implements WebSocketListener {
+        @Override
+        public void onWebSocketClose(int code, String reason) {
+            logger.info("onWebSocketClose {} {} ", code, reason);
+            for (HarmonyClientListener listener : listeners) {
+                if (listener != null) {
+                    listener.hubDisconnected(reason);
+                }
+            }
+            Iterator<String> it = responseFutures.keySet().iterator();
+            while (it.hasNext()) {
+                String key = it.next();
+                responseFutures.remove(key).completeExceptionally(new IOException("Connection Closed"));
+            }
+        }
+
+        @Override
+        public void onWebSocketConnect(Session wssession) {
+            logger.info("onWebSocketConnect {}", wssession);
+            connectedTime = System.currentTimeMillis();
+            session = wssession;
+            getConfig().thenAccept(m -> {
+                for (HarmonyClientListener listener : listeners) {
+                    if (listener != null) {
+                        listener.hubConnected();
+                    }
+                }
+            });
+            getCurrentActivity();
+        }
+
+        @Override
+        public void onWebSocketError(Throwable error) {
+            logger.error("onWebSocketError", error);
+        }
+
+        @Override
+        public void onWebSocketBinary(byte[] data, int offset, int len) {
+            logger.info("onWebSocketBinary {} {} {} ", data, offset, len);
+        }
+
+        @Override
+        public void onWebSocketText(String message) {
+            logger.info("onWebSocketText {}", message);
+            Message m = gson.fromJson(message, Message.class);
+
+            if (m == null) {
+                return;
+            }
+
+            if (m instanceof ResponseMessage) {
+                ResponseMessage rm = (ResponseMessage) m;
+                logger.info("Looking for future for ID {} ", rm.getId());
+                CompletableFuture<ResponseMessage> future = responseFutures.remove(rm.getId());
+                if (future != null) {
+                    logger.info("Calling for future for ID {} ", rm.getId());
+                    future.complete(rm);
+                }
+            }
+
+            if (m instanceof ActivityFinishedMessage) {
+                if (cachedConfig != null) {
+                    ActivityFinishedMessage af = (ActivityFinishedMessage) m;
+                    logger.info("ActivityFinishedMessage {}", af.getActivityFinished().getActivityId());
+                    Activity activity = cachedConfig.getActivityById(af.getActivityFinished().getActivityId());
+
+                    if (currentActivity != activity) {
+                        currentActivity = activity;
+                        for (HarmonyClientListener listener : listeners) {
+                            if (listener != null) {
+                                listener.activityStarted(currentActivity);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (m instanceof DigestMessage) {
+                boolean newStatus = false;
+                DigestMessage dm = (DigestMessage) m;
+                Status status = dm.getDigest().getActivityStatus();
+                Activity activity = cachedConfig.getActivityById(dm.getDigest().getActivityId());
+                logger.info("DigestMessage {}", activity.getId());
+                if (status == Status.HUB_IS_OFF) {
+                    // HUB_IS_OFF is a special status received on PowerOff activity only,
+                    // but it affects the status of all activities
+                    for (Activity act : cachedConfig.getActivities()) {
+                        if (act.getStatus() != status) {
+                            newStatus = true;
+                            act.setStatus(status);
+                        }
+                    }
+                } else if (status != Status.UNKNOWN && status != activity.getStatus()) {
+                    newStatus = true;
+                    activity.setStatus(status);
+                }
+                // inform listeners only if status was changed - avoid duplicate notifications
+                if (newStatus) {
+                    for (HarmonyClientListener listener : listeners) {
+                        logger.debug("status listener[{}] notified: {} - {}", listener, activity, status);
+                        listener.activityStatusChanged(activity, status);
+                    }
+                }
+            }
+        }
     }
 }
