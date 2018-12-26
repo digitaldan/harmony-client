@@ -45,11 +45,14 @@ public class MessageDeserializer implements JsonDeserializer<Message> {
             if (clazz != null) {
                 logger.info("Calling fromJsonElement");
                 return context.deserialize(jsonObject, clazz);
+            } else {
+                logger.debug("Unknown message type {}", mime);
+                return null;
             }
         }
 
         JsonElement code = jsonObject.get("code");
-        if (code != null && code.getAsInt() != 200) {
+        if (code != null && code.getAsInt() >= 400) {
             return context.deserialize(jsonObject, ErrorResponseMessage.class);
         }
         return null;

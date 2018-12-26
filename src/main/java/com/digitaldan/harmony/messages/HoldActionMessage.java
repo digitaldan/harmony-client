@@ -3,9 +3,12 @@ package com.digitaldan.harmony.messages;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.google.gson.Gson;
+
 public class HoldActionMessage {
 
     public static final String MIME_TYPE = "vnd.logitech.harmony/vnd.logitech.harmony.engine?holdAction";
+    Gson gson = new Gson();
 
     public enum HoldStatus {
         PRESS,
@@ -19,11 +22,11 @@ public class HoldActionMessage {
         public HoldActionRequestMessage(int deviceId, String button, HoldStatus status, long timestamp) {
             super(MIME_TYPE);
             HashMap<String, Object> action = new HashMap<>();
+            action.put("command", button);
             action.put("type", "IRCommand");
             action.put("deviceId", String.valueOf(deviceId));
-            action.put("command", button);
 
-            params.put("action", action);
+            params.put("action", gson.toJson(action));
             params.put("status", status.toString().toLowerCase());
             params.put("timestamp", timestamp);
         }
@@ -33,11 +36,5 @@ public class HoldActionMessage {
             return params;
         }
 
-    }
-
-    public static class HoldActionResponseMessage extends ResponseMessage {
-        public HoldActionResponseMessage(int code, String id, String msg) {
-            super(code, id, msg);
-        }
     }
 }

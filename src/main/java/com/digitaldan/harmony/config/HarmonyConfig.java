@@ -92,4 +92,13 @@ public class HarmonyConfig {
         }
         return null;
     }
+
+    public Device getDeviceById(int id) {
+        for (Device device : devices) {
+            if (device.getId() == id) {
+                return device;
+            }
+        }
+        return null;
+    }
 }

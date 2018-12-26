@@ -8,6 +8,10 @@ import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.eclipse.jetty.client.HttpClient;
@@ -57,6 +61,8 @@ public class HarmonyClient {
     private long connectedTime = System.currentTimeMillis();
     private HttpClient httpClient;
 
+    private ScheduledExecutorService timeoutService;;
+
     /*
      * Public Methods
      */
@@ -64,6 +70,7 @@ public class HarmonyClient {
     public HarmonyClient() throws Exception {
         httpClient = new HttpClient();
         httpClient.start();
+        timeoutService = Executors.newSingleThreadScheduledExecutor();
 
     }
 
@@ -159,21 +166,24 @@ public class HarmonyClient {
 
     public CompletableFuture<?> pressButton(int deviceId, String button, int timeMillis) {
         final CompletableFuture<?> future = new CompletableFuture<>();
-
-        sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS,
+        sendNoReplyMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS,
                 System.currentTimeMillis() - connectedTime)).thenAccept(m -> {
                     try {
                         Thread.sleep(timeMillis);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
-                    sendMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS,
-                            System.currentTimeMillis() - connectedTime)).thenAccept(mm -> {
+                    sendNoReplyMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button,
+                            HoldStatus.PRESS, System.currentTimeMillis() - connectedTime)).thenAccept(mm -> {
                                 future.complete(null);
 
                             });
                 });
-
+        try {
+            Thread.sleep(timeMillis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         return future;
     }
 
@@ -210,19 +220,54 @@ public class HarmonyClient {
      * Private Methods
      */
 
-    CompletableFuture<ResponseMessage> sendMessage(RequestMessage message) {
+    private ScheduledFuture<?> scheduleTimeout(String msgId) {
+        return timeoutService.schedule(() -> {
+            CompletableFuture<?> f = responseFutures.remove(msgId);
+            if (f != null) {
+                f.completeExceptionally(new Exception("response timeout"));
+            }
+        }, 2, TimeUnit.MINUTES);
+    }
+
+    private CompletableFuture<ResponseMessage> sendMessage(RequestMessage message) {
         if (session == null) {
             return null;
         }
         final String id = message.getId();
         final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
         String json = message.toJson();
+
         logger.info(json);
         session.getRemote().sendString(json, new WriteCallback() {
             @Override
             public void writeSuccess() {
-                logger.debug("writeSuccess for id {}", id);
+                logger.info("writeSuccess for id {}", id);
                 responseFutures.put(id, future);
+                // TODO we need to remove these timeouts when responses are handled normally
+                scheduleTimeout(message.getId());
+            }
+
+            @Override
+            public void writeFailed(Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+        return future;
+    }
+
+    private CompletableFuture<ResponseMessage> sendNoReplyMessage(RequestMessage message) {
+        if (session == null) {
+            return null;
+        }
+        final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
+        String json = message.toJson();
+
+        logger.info(json);
+        session.getRemote().sendString(json, new WriteCallback() {
+            @Override
+            public void writeSuccess() {
+                logger.info("writeSuccess for message {} ", message.getId());
+                future.complete(null);
             }
 
             @Override
