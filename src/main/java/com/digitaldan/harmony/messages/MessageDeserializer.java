@@ -43,7 +43,7 @@ public class MessageDeserializer implements JsonDeserializer<Message> {
         if (mime != null) {
             Class<?> clazz = responseHandlers.get(mime.getAsString());
             if (clazz != null) {
-                logger.info("Calling fromJsonElement");
+                logger.trace("Calling fromJsonElement");
                 return context.deserialize(jsonObject, clazz);
             } else {
                 logger.debug("Unknown message type {}", mime);

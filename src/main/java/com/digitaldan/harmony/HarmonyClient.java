@@ -124,7 +124,7 @@ public class HarmonyClient {
         DiscoveryRequestMessage drm = new DiscoveryRequestMessage();
         Request request = httpClient.POST(uri);
 
-        logger.info("Sending {}", drm.toJSON());
+        logger.trace("Sending {}", drm.toJSON());
         request.content(new StringContentProvider(drm.toJSON()), "application/json");
         request.header(HttpHeader.ORIGIN, "http//:localhost.nebula.myharmony.com");
         request.header(HttpHeader.ACCEPT, "text/plain");
@@ -132,7 +132,7 @@ public class HarmonyClient {
         try {
             ContentResponse response = request.send();
             String res = new String(response.getContent());
-            logger.debug("Discovery response for hos {} : {}", host, res);
+            logger.trace("Discovery response for hos {} : {}", host, res);
             DiscoveryResponseMessage dr = DiscoveryResponseMessage.fromJSON(res);
             if (dr == null) {
                 throw new IOException("Could not serialize discovery response");
@@ -234,10 +234,14 @@ public class HarmonyClient {
 
     public CompletableFuture<HarmonyConfig> getConfig() {
         final CompletableFuture<HarmonyConfig> future = new CompletableFuture<HarmonyConfig>();
-        sendMessage(new ConfigMessage.ConfigRequestMessage()).thenAccept(m -> {
-            this.cachedConfig = ((ConfigMessage.ConfigResponseMessage) m).getHarmonyConfig();
-            future.complete(this.cachedConfig);
-        });
+        if (cachedConfig != null) {
+            future.complete(cachedConfig);
+        } else {
+            sendMessage(new ConfigMessage.ConfigRequestMessage()).thenAccept(m -> {
+                this.cachedConfig = ((ConfigMessage.ConfigResponseMessage) m).getHarmonyConfig();
+                future.complete(this.cachedConfig);
+            });
+        }
         return future;
     }
 
@@ -262,11 +266,11 @@ public class HarmonyClient {
         final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
         String json = message.toJson();
 
-        logger.info(json);
+        logger.debug("Sending: {}", json);
         session.getRemote().sendString(json, new WriteCallback() {
             @Override
             public void writeSuccess() {
-                logger.info("writeSuccess for id {}", id);
+                logger.trace("writeSuccess for id {}", id);
                 responseFutures.put(id, future);
                 // TODO we need to remove these timeouts when responses are handled normally
                 scheduleTimeout(message.getId());
@@ -287,11 +291,11 @@ public class HarmonyClient {
         final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
         String json = message.toJson();
 
-        logger.info(json);
+        logger.debug("Sending: {}", json);
         session.getRemote().sendString(json, new WriteCallback() {
             @Override
             public void writeSuccess() {
-                logger.info("writeSuccess for message {} ", message.getId());
+                logger.trace("writeSuccess for message {} ", message.getId());
                 future.complete(null);
             }
 
@@ -327,7 +331,7 @@ public class HarmonyClient {
     private class MyWebSocketListener implements WebSocketListener {
         @Override
         public void onWebSocketClose(int code, String reason) {
-            logger.info("onWebSocketClose {} {} ", code, reason);
+            logger.debug("onWebSocketClose {} {} ", code, reason);
             for (HarmonyClientListener listener : listeners) {
                 if (listener != null) {
                     listener.hubDisconnected(reason);
@@ -342,7 +346,7 @@ public class HarmonyClient {
 
         @Override
         public void onWebSocketConnect(Session wssession) {
-            logger.info("onWebSocketConnect {}", wssession);
+            logger.debug("onWebSocketConnect {}", wssession);
             connectedTime = System.currentTimeMillis();
             session = wssession;
             getConfig().thenAccept(m -> {
@@ -362,12 +366,12 @@ public class HarmonyClient {
 
         @Override
         public void onWebSocketBinary(byte[] data, int offset, int len) {
-            logger.info("onWebSocketBinary {} {} {} ", data, offset, len);
+            logger.debug("onWebSocketBinary {} {} {} ", data, offset, len);
         }
 
         @Override
         public void onWebSocketText(String message) {
-            logger.info("onWebSocketText {}", message);
+            logger.debug("onWebSocketText {}", message);
             Message m = gson.fromJson(message, Message.class);
 
             if (m == null) {
@@ -376,20 +380,20 @@ public class HarmonyClient {
 
             if (m instanceof ResponseMessage) {
                 ResponseMessage rm = (ResponseMessage) m;
-                logger.info("Looking for future for ID {} ", rm.getId());
+                logger.trace("Looking for future for ID {} ", rm.getId());
                 CompletableFuture<ResponseMessage> future = responseFutures.remove(rm.getId());
                 if (future != null) {
-                    logger.info("Calling for future for ID {} ", rm.getId());
+                    logger.trace("Calling for future for ID {} ", rm.getId());
                     future.complete(rm);
                 }
             }
 
             if (m instanceof ErrorResponseMessage) {
                 ResponseMessage rm = (ResponseMessage) m;
-                logger.info("Error Resposne: Looking for future for ID {} ", rm.getId());
+                logger.trace("Error Resposne: Looking for future for ID {} ", rm.getId());
                 CompletableFuture<ResponseMessage> future = responseFutures.remove(rm.getId());
                 if (future != null) {
-                    logger.info("Error Resposne:  Calling for future for ID {} ", rm.getId());
+                    logger.trace("Error Resposne:  Calling for future for ID {} ", rm.getId());
                     future.completeExceptionally(
                             new Exception(String.format("Error Code %d : %s", rm.getCode(), rm.getMsg())));
                 }
@@ -398,7 +402,7 @@ public class HarmonyClient {
             if (m instanceof ActivityFinishedMessage) {
                 if (cachedConfig != null) {
                     ActivityFinishedMessage af = (ActivityFinishedMessage) m;
-                    logger.info("ActivityFinishedMessage {}", af.getActivityFinished().getActivityId());
+                    logger.debug("ActivityFinishedMessage {}", af.getActivityFinished().getActivityId());
                     Activity activity = cachedConfig.getActivityById(af.getActivityFinished().getActivityId());
 
                     if (currentActivity != activity) {
@@ -417,7 +421,7 @@ public class HarmonyClient {
                 DigestMessage dm = (DigestMessage) m;
                 Status status = dm.getDigest().getActivityStatus();
                 Activity activity = cachedConfig.getActivityById(dm.getDigest().getActivityId());
-                logger.info("DigestMessage {}", activity.getId());
+                logger.trace("DigestMessage {}", activity.getId());
                 if (status == Status.HUB_IS_OFF) {
                     // HUB_IS_OFF is a special status received on PowerOff activity only,
                     // but it affects the status of all activities
