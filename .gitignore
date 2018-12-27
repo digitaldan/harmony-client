@@ -1,0 +1,8 @@
+*.iml
+.DS_Store
+target/
+src-gen/
+bin/
+.antlr*
+.metadata/
+*/plugin.xml_gen

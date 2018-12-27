@@ -67,9 +67,8 @@ public class HarmonyClient {
      * Public Methods
      */
 
-    public HarmonyClient() throws Exception {
+    public HarmonyClient() {
         httpClient = new HttpClient();
-        httpClient.start();
         timeoutService = Executors.newSingleThreadScheduledExecutor();
 
     }
@@ -86,8 +85,33 @@ public class HarmonyClient {
     }
 
     public void connect(String host) throws IOException {
+        if (session != null && session.isOpen()) {
+            throw new IOException("Can not call connect on already connected session");
+        }
+        if (!httpClient.isStarted()) {
+            try {
+                httpClient.start();
+            } catch (Exception e) {
+                throw new IOException(e.getMessage());
+            }
+        }
         Discovery discovery = getDiscoveryFromHost(host);
+        if (discovery == null) {
+            throw new IOException(String.format("Could not discover host %s", host));
+        }
         connectWebsocket(host, discovery.getRemoteId());
+    }
+
+    public void disconnect() {
+        if (session != null && session.isOpen()) {
+            session.close();
+        }
+        if (httpClient.isStarted()) {
+            try {
+                httpClient.stop();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     public Discovery getDiscoveryFromHost(String host) throws IOException {
@@ -108,6 +132,7 @@ public class HarmonyClient {
         try {
             ContentResponse response = request.send();
             String res = new String(response.getContent());
+            logger.debug("Discovery response for hos {} : {}", host, res);
             DiscoveryResponseMessage dr = DiscoveryResponseMessage.fromJSON(res);
             if (dr == null) {
                 throw new IOException("Could not serialize discovery response");
