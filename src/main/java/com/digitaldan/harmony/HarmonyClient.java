@@ -3,10 +3,11 @@ package com.digitaldan.harmony;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -52,8 +53,8 @@ import com.google.gson.GsonBuilder;
 public class HarmonyClient {
     private final Logger logger = LoggerFactory.getLogger(HarmonyClient.class);
     private Gson gson = new GsonBuilder().registerTypeAdapter(Message.class, new MessageDeserializer()).create();
-    private ConcurrentHashMap<String, CompletableFuture<ResponseMessage>> responseFutures = new ConcurrentHashMap<>();
-    private ArrayList<HarmonyClientListener> listeners = new ArrayList<>();
+    private HashMap<String, CompletableFuture<ResponseMessage>> responseFutures = new HashMap<>();
+    private HashSet<HarmonyClientListener> listeners = new HashSet<>();
     private WebSocketClient client;
     private Session session;
     private HarmonyConfig cachedConfig;
@@ -70,18 +71,21 @@ public class HarmonyClient {
     public HarmonyClient() {
         httpClient = new HttpClient();
         timeoutService = Executors.newSingleThreadScheduledExecutor();
-
     }
 
     public void addListener(HarmonyClientListener listener) {
-        listeners.add(listener);
+        synchronized (listeners) {
+            listeners.add(listener);
+        }
         if (currentActivity != null) {
             listener.activityStarted(currentActivity);
         }
     }
 
     public void removeListener(HarmonyClientListener listener) {
-        listeners.remove(listener);
+        synchronized (listeners) {
+            listeners.remove(listener);
+        }
     }
 
     public void connect(String host) throws IOException {
@@ -332,15 +336,22 @@ public class HarmonyClient {
         @Override
         public void onWebSocketClose(int code, String reason) {
             logger.debug("onWebSocketClose {} {} ", code, reason);
-            for (HarmonyClientListener listener : listeners) {
-                if (listener != null) {
-                    listener.hubDisconnected(reason);
+            synchronized (listeners) {
+                Iterator<HarmonyClientListener> clientIter = listeners.iterator();
+                while (clientIter.hasNext()) {
+                    HarmonyClientListener listener = clientIter.next();
+                    if (listener != null) {
+                        listener.hubDisconnected(reason);
+                    }
                 }
             }
-            Iterator<String> it = responseFutures.keySet().iterator();
-            while (it.hasNext()) {
-                String key = it.next();
-                responseFutures.remove(key).completeExceptionally(new IOException("Connection Closed"));
+            synchronized (responseFutures) {
+                Iterator<Map.Entry<String, CompletableFuture<ResponseMessage>>> responseIter = responseFutures
+                        .entrySet().iterator();
+                while (responseIter.hasNext()) {
+                    responseIter.next().getValue().completeExceptionally(new IOException("Connection Closed"));
+                    responseIter.remove();
+                }
             }
         }
 
@@ -350,9 +361,13 @@ public class HarmonyClient {
             connectedTime = System.currentTimeMillis();
             session = wssession;
             getConfig().thenAccept(m -> {
-                for (HarmonyClientListener listener : listeners) {
-                    if (listener != null) {
-                        listener.hubConnected();
+                synchronized (listeners) {
+                    Iterator<HarmonyClientListener> clientIter = listeners.iterator();
+                    while (clientIter.hasNext()) {
+                        HarmonyClientListener listener = clientIter.next();
+                        if (listener != null) {
+                            listener.hubConnected();
+                        }
                     }
                 }
             });
@@ -407,9 +422,13 @@ public class HarmonyClient {
 
                     if (currentActivity != activity) {
                         currentActivity = activity;
-                        for (HarmonyClientListener listener : listeners) {
-                            if (listener != null) {
-                                listener.activityStarted(currentActivity);
+                        synchronized (listeners) {
+                            Iterator<HarmonyClientListener> clientIter = listeners.iterator();
+                            while (clientIter.hasNext()) {
+                                HarmonyClientListener listener = clientIter.next();
+                                if (listener != null) {
+                                    listener.activityStarted(currentActivity);
+                                }
                             }
                         }
                     }
@@ -437,9 +456,13 @@ public class HarmonyClient {
                 }
                 // inform listeners only if status was changed - avoid duplicate notifications
                 if (newStatus) {
-                    for (HarmonyClientListener listener : listeners) {
-                        logger.debug("status listener[{}] notified: {} - {}", listener, activity, status);
-                        listener.activityStatusChanged(activity, status);
+                    synchronized (listeners) {
+                        Iterator<HarmonyClientListener> clientIter = listeners.iterator();
+                        while (clientIter.hasNext()) {
+                            HarmonyClientListener listener = clientIter.next();
+                            logger.debug("status listener[{}] notified: {} - {}", listener, activity, status);
+                            listener.activityStatusChanged(activity, status);
+                        }
                     }
                 }
             }
