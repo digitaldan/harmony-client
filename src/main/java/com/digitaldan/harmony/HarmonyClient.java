@@ -203,7 +203,7 @@ public class HarmonyClient {
                         throw new RuntimeException(e);
                     }
                     sendNoReplyMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button,
-                            HoldStatus.PRESS, System.currentTimeMillis() - connectedTime)).thenAccept(mm -> {
+                            HoldStatus.RELEASE, System.currentTimeMillis() - connectedTime)).thenAccept(mm -> {
                                 future.complete(null);
 
                             });
