@@ -1,8 +1,11 @@
 *.iml
 .DS_Store
+.classpath
+.project
 target/
 src-gen/
 bin/
 .antlr*
 .metadata/
+.settings/
 */plugin.xml_gen
