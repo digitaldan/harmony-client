@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -51,10 +52,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 public class HarmonyClient {
+    private static final int ONE_MB = 1024 * 1024;
     private final Logger logger = LoggerFactory.getLogger(HarmonyClient.class);
-    private Gson gson = new GsonBuilder().registerTypeAdapter(Message.class, new MessageDeserializer()).create();
-    private HashMap<String, CompletableFuture<ResponseMessage>> responseFutures = new HashMap<>();
-    private HashSet<HarmonyClientListener> listeners = new HashSet<>();
+    private final Gson gson = new GsonBuilder().registerTypeAdapter(Message.class, new MessageDeserializer()).create();
+    private final Map<String, CompletableFuture<ResponseMessage>> responseFutures = new HashMap<>();
+    private final Set<HarmonyClientListener> listeners = new HashSet<>();
     private WebSocketClient client;
     private Session session;
     private HarmonyConfig cachedConfig;
@@ -299,7 +301,7 @@ public class HarmonyClient {
         session.getRemote().sendString(json, new WriteCallback() {
             @Override
             public void writeSuccess() {
-                logger.trace("writeSuccess for message {} ", message.getId());
+                logger.trace("writeSuccess for message {}", message.getId());
                 future.complete(null);
             }
 
@@ -320,6 +322,7 @@ public class HarmonyClient {
         }
 
         client = new WebSocketClient(httpClient);
+        client.getPolicy().setMaxTextMessageSize(ONE_MB);
 
         try {
             client.start();
@@ -335,7 +338,7 @@ public class HarmonyClient {
     private class MyWebSocketListener implements WebSocketListener {
         @Override
         public void onWebSocketClose(int code, String reason) {
-            logger.debug("onWebSocketClose {} {} ", code, reason);
+            logger.debug("onWebSocketClose {} {}", code, reason);
             synchronized (listeners) {
                 Iterator<HarmonyClientListener> clientIter = listeners.iterator();
                 while (clientIter.hasNext()) {
@@ -381,7 +384,7 @@ public class HarmonyClient {
 
         @Override
         public void onWebSocketBinary(byte[] data, int offset, int len) {
-            logger.debug("onWebSocketBinary {} {} {} ", data, offset, len);
+            logger.debug("onWebSocketBinary {} {} {}", data, offset, len);
         }
 
         @Override
@@ -395,20 +398,20 @@ public class HarmonyClient {
 
             if (m instanceof ResponseMessage) {
                 ResponseMessage rm = (ResponseMessage) m;
-                logger.trace("Looking for future for ID {} ", rm.getId());
+                logger.trace("Looking for future for ID {}", rm.getId());
                 CompletableFuture<ResponseMessage> future = responseFutures.remove(rm.getId());
                 if (future != null) {
-                    logger.trace("Calling for future for ID {} ", rm.getId());
+                    logger.trace("Calling for future for ID {}", rm.getId());
                     future.complete(rm);
                 }
             }
 
             if (m instanceof ErrorResponseMessage) {
                 ResponseMessage rm = (ResponseMessage) m;
-                logger.trace("Error Resposne: Looking for future for ID {} ", rm.getId());
+                logger.trace("Error Response: Looking for future for ID {}", rm.getId());
                 CompletableFuture<ResponseMessage> future = responseFutures.remove(rm.getId());
                 if (future != null) {
-                    logger.trace("Error Resposne:  Calling for future for ID {} ", rm.getId());
+                    logger.trace("Error Response:  Calling for future for ID {}", rm.getId());
                     future.completeExceptionally(
                             new Exception(String.format("Error Code %d : %s", rm.getCode(), rm.getMsg())));
                 }
