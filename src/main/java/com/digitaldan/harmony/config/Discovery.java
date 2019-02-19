@@ -16,8 +16,8 @@ public class Discovery {
     private String uuid;
     private String oohEnabled;
     private String friendlyName;
-    private String remoteId;
-    private String discoveryServerUri;
+    private String activeRemoteId;
+    private String discoveryServer;
     private String openApiVersion;
     private String email;
     private String minimumOpenApiClientVersionRequired;
@@ -77,12 +77,12 @@ public class Discovery {
         return friendlyName;
     }
 
-    public String getRemoteId() {
-        return remoteId;
+    public String getActiveRemoteId() {
+        return activeRemoteId;
     }
 
-    public String getDiscoveryServerUri() {
-        return discoveryServerUri;
+    public String getDiscoveryServer() {
+        return discoveryServer;
     }
 
     public String getOpenApiVersion() {

@@ -105,7 +105,7 @@ public class HarmonyClient {
         if (discovery == null) {
             throw new IOException(String.format("Could not discover host %s", host));
         }
-        connectWebsocket(host, discovery.getRemoteId());
+        connectWebsocket(host, discovery.getActiveRemoteId());
     }
 
     public void disconnect() {
@@ -132,7 +132,7 @@ public class HarmonyClient {
 
         logger.trace("Sending {}", drm.toJSON());
         request.content(new StringContentProvider(drm.toJSON()), "application/json");
-        request.header(HttpHeader.ORIGIN, "http//:localhost.nebula.myharmony.com");
+        request.header(HttpHeader.ORIGIN, "http://sl.dhg.myharmony.com");
         request.header(HttpHeader.ACCEPT, "text/plain");
 
         try {

@@ -10,7 +10,7 @@ import com.google.gson.annotations.SerializedName;
 
 public class DiscoveryMessage {
 
-    public static String MIME_TYPE = "connect.discoveryinfo?get";
+    public static String MIME_TYPE = "setup.account?getProvisionInfo";
 
     public static class DiscoveryRequestMessage {
         @SuppressWarnings("unused")
