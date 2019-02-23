@@ -28,10 +28,13 @@ import org.eclipse.jetty.websocket.client.WebSocketClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.digitaldan.harmony.config.Action;
 import com.digitaldan.harmony.config.Activity;
 import com.digitaldan.harmony.config.Activity.Status;
+import com.digitaldan.harmony.config.ControlGroup;
 import com.digitaldan.harmony.config.Device;
 import com.digitaldan.harmony.config.Discovery;
+import com.digitaldan.harmony.config.Function;
 import com.digitaldan.harmony.config.HarmonyConfig;
 import com.digitaldan.harmony.messages.ActivityFinishedMessage;
 import com.digitaldan.harmony.messages.ConfigMessage;
@@ -186,15 +189,65 @@ public class HarmonyClient {
             if (activity == null) {
                 throw new IllegalArgumentException(String.format("Unknown activity '%s'", label));
             }
-            // if (currentActivity == null || !label.equals(currentActivity.getLabel())) {
             return sendMessage(new StartActivityMessage.StartActivityRequestMessage(activity.getId(),
                     System.currentTimeMillis() - connectedTime));
-            // }
-
         }
         return null;
     }
 
+    /**
+     * Sends a button press command to a device in the current activity that is is registered to handle the command
+     *
+     * @param buttonName
+     * @return
+     */
+    public CompletableFuture<?> pressButtonCurrentActivity(String buttonName) {
+        return pressButtonCurrentActivity(buttonName, 200);
+    }
+
+    /**
+     * Sends a button press command to a device in the current activity that is is registered to handle the command
+     *
+     * @param buttonName
+     * @param timeMillis
+     * @return
+     */
+    public CompletableFuture<?> pressButtonCurrentActivity(String buttonName, int timeMillis) {
+        final CompletableFuture<?> future = new CompletableFuture<>();
+        getCurrentActivity().thenAccept(currentActivity -> {
+            // control group, function, name/label
+            String activityLabel = currentActivity.getLabel();
+            for (Activity activity : cachedConfig.getActivities()) {
+                if (activity.getLabel().equalsIgnoreCase(activityLabel)) {
+                    for (ControlGroup controlGroup : activity.getControlGroup()) {
+                        for (Function function : controlGroup.getFunction()) {
+                            if (function.getName().equalsIgnoreCase(buttonName)
+                                    || function.getLabel().equalsIgnoreCase(buttonName)) {
+                                Action action = gson.fromJson(function.getAction(), Action.class);
+                                pressButton(action.getDeviceId(), action.getCommand(), timeMillis).thenAccept(mm -> {
+                                    future.complete(null);
+                                });
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+            if (!future.isDone()) {
+                future.completeExceptionally(new Exception("Could not find device in activity for button press"));
+            }
+        });
+        return future;
+    }
+
+    /**
+     * Sends a button press command to a device, depressed for a given time
+     *
+     * @param deviceId
+     * @param button
+     * @param timeMillis
+     * @return
+     */
     public CompletableFuture<?> pressButton(int deviceId, String button, int timeMillis) {
         final CompletableFuture<?> future = new CompletableFuture<>();
         sendNoReplyMessage(new HoldActionMessage.HoldActionRequestMessage(deviceId, button, HoldStatus.PRESS,
@@ -218,10 +271,24 @@ public class HarmonyClient {
         return future;
     }
 
+    /**
+     * Sends a button press command to a device, depressed for 200ms
+     *
+     * @param deviceId
+     * @param button
+     * @return
+     */
     public CompletableFuture<?> pressButton(int deviceId, String button) {
         return pressButton(deviceId, button, 200);
     }
 
+    /**
+     * Sends a button press command to a device, depressed for 200ms
+     *
+     * @param deviceName
+     * @param button
+     * @return
+     */
     public CompletableFuture<?> pressButton(String deviceName, String button) {
         Device device = cachedConfig.getDeviceByName(deviceName);
         if (device == null) {
@@ -230,6 +297,14 @@ public class HarmonyClient {
         return pressButton(device.getId(), button);
     }
 
+    /**
+     * Sends a button press command to a device, depressed for a given time
+     *
+     * @param deviceName
+     * @param button
+     * @param timeMillis
+     * @return
+     */
     public CompletableFuture<?> pressButton(String deviceName, String button, int pressTime) {
         Device device = cachedConfig.getDeviceByName(deviceName);
         if (device == null) {
@@ -339,23 +414,7 @@ public class HarmonyClient {
         @Override
         public void onWebSocketClose(int code, String reason) {
             logger.debug("onWebSocketClose {} {}", code, reason);
-            synchronized (listeners) {
-                Iterator<HarmonyClientListener> clientIter = listeners.iterator();
-                while (clientIter.hasNext()) {
-                    HarmonyClientListener listener = clientIter.next();
-                    if (listener != null) {
-                        listener.hubDisconnected(reason);
-                    }
-                }
-            }
-            synchronized (responseFutures) {
-                Iterator<Map.Entry<String, CompletableFuture<ResponseMessage>>> responseIter = responseFutures
-                        .entrySet().iterator();
-                while (responseIter.hasNext()) {
-                    responseIter.next().getValue().completeExceptionally(new IOException("Connection Closed"));
-                    responseIter.remove();
-                }
-            }
+            hubDisconected(reason);
         }
 
         @Override
@@ -380,6 +439,7 @@ public class HarmonyClient {
         @Override
         public void onWebSocketError(Throwable error) {
             logger.error("onWebSocketError", error);
+            hubDisconected(error.getMessage());
         }
 
         @Override
@@ -471,4 +531,26 @@ public class HarmonyClient {
             }
         }
     }
+
+    private void hubDisconected(String reason) {
+        logger.debug("notifyClose {} {}", reason);
+        synchronized (listeners) {
+            Iterator<HarmonyClientListener> clientIter = listeners.iterator();
+            while (clientIter.hasNext()) {
+                HarmonyClientListener listener = clientIter.next();
+                if (listener != null) {
+                    listener.hubDisconnected(reason);
+                }
+            }
+        }
+        synchronized (responseFutures) {
+            Iterator<Map.Entry<String, CompletableFuture<ResponseMessage>>> responseIter = responseFutures.entrySet()
+                    .iterator();
+            while (responseIter.hasNext()) {
+                responseIter.next().getValue().completeExceptionally(new IOException("Connection Closed"));
+                responseIter.remove();
+            }
+        }
+    }
+
 }

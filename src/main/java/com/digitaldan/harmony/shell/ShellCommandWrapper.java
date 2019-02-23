@@ -11,6 +11,7 @@ public class ShellCommandWrapper {
     @Argument(handler = SubCommandHandler.class)
     @SubCommands({ @SubCommand(name = "get_config", impl = GetConfigCommand.class),
             @SubCommand(name = "press", impl = PressButtonCommand.class),
+            @SubCommand(name = "pressActivity", impl = PressButtonActivityCommand.class),
             @SubCommand(name = "start", impl = StartActivityCommand.class),
             @SubCommand(name = "list", impl = ListCommand.class),
             @SubCommand(name = "show", impl = ShowCommand.class), })
