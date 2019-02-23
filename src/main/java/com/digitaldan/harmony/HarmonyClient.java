@@ -66,7 +66,6 @@ public class HarmonyClient {
     private Activity currentActivity;
     private long connectedTime = System.currentTimeMillis();
     private HttpClient httpClient;
-
     private ScheduledExecutorService timeoutService;;
 
     /*
@@ -112,7 +111,7 @@ public class HarmonyClient {
     }
 
     public void disconnect() {
-        if (session != null && session.isOpen()) {
+        if (isConnected()) {
             session.close();
         }
         if (httpClient.isStarted()) {
@@ -121,6 +120,10 @@ public class HarmonyClient {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    public boolean isConnected() {
+        return session != null && session.isOpen();
     }
 
     public Discovery getDiscoveryFromHost(String host) throws IOException {
@@ -340,11 +343,12 @@ public class HarmonyClient {
     }
 
     private CompletableFuture<ResponseMessage> sendMessage(RequestMessage message) {
-        if (session == null) {
-            return null;
+        final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
+        if (!isConnected()) {
+            future.completeExceptionally(new IOException("Not Connected"));
+            return future;
         }
         final String id = message.getId();
-        final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
         String json = message.toJson();
 
         logger.debug("Sending: {}", json);
@@ -366,7 +370,7 @@ public class HarmonyClient {
     }
 
     private CompletableFuture<ResponseMessage> sendNoReplyMessage(RequestMessage message) {
-        if (session == null) {
+        if (!isConnected()) {
             return null;
         }
         final CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
@@ -438,18 +442,18 @@ public class HarmonyClient {
 
         @Override
         public void onWebSocketError(Throwable error) {
-            logger.error("onWebSocketError", error);
+            logger.debug("onWebSocketError", error);
             hubDisconected(error.getMessage());
         }
 
         @Override
         public void onWebSocketBinary(byte[] data, int offset, int len) {
-            logger.debug("onWebSocketBinary {} {} {}", data, offset, len);
+            logger.trace("onWebSocketBinary {} {} {}", data, offset, len);
         }
 
         @Override
         public void onWebSocketText(String message) {
-            logger.debug("onWebSocketText {}", message);
+            logger.trace("onWebSocketText {}", message);
             Message m = gson.fromJson(message, Message.class);
 
             if (m == null) {
@@ -533,6 +537,7 @@ public class HarmonyClient {
     }
 
     private void hubDisconected(String reason) {
+        session.close();
         logger.debug("notifyClose {} {}", reason);
         synchronized (listeners) {
             Iterator<HarmonyClientListener> clientIter = listeners.iterator();
@@ -552,5 +557,4 @@ public class HarmonyClient {
             }
         }
     }
-
 }
