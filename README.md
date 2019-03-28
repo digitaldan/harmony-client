@@ -7,9 +7,9 @@ License EPL v2.0
 [![TravisCI Build Status](https://travis-ci.org/digitaldan/harmony-client.svg?branch=master)](https://travis-ci.org/digitaldan/harmony-client)
 # Running
 
-mvn clean compile assembly:single
+`mvn clean compile assembly:single`
  
-java -cp target/harmony-client-1.0-SNAPSHOT-jar-with-dependencies.jar com.digitaldan.harmony.App YOUR_HUB_IP
+`java -cp target/harmony-client-*-jar-with-dependencies.jar com.digitaldan.harmony.shell.App YOUR_HUB_IP`
  
 This will launch a interactive shell, commands are:
  
