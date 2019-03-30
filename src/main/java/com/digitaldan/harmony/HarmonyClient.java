@@ -77,6 +77,11 @@ public class HarmonyClient {
         timeoutService = Executors.newSingleThreadScheduledExecutor();
     }
 
+    /**
+     * Adds a {@link HarmonyClientListener}
+     *
+     * @param listener HarmonyClientListener
+     */
     public void addListener(HarmonyClientListener listener) {
         synchronized (listeners) {
             listeners.add(listener);
@@ -86,12 +91,23 @@ public class HarmonyClient {
         }
     }
 
+    /**
+     * Removes a {@link HarmonyClientListener}
+     *
+     * @param listener HarmonyClientListener
+     */
     public void removeListener(HarmonyClientListener listener) {
         synchronized (listeners) {
             listeners.remove(listener);
         }
     }
 
+    /**
+     * Connect to a HarmonyHub
+     *
+     * @param host host or IP to connect to
+     * @throws IOException if unable to connect to host
+     */
     public void connect(String host) throws IOException {
         if (session != null && session.isOpen()) {
             throw new IOException("Can not call connect on already connected session");
@@ -110,6 +126,9 @@ public class HarmonyClient {
         connectWebsocket(host, discovery.getActiveRemoteId());
     }
 
+    /**
+     * Disconnects from a HarmonyHub
+     */
     public void disconnect() {
         if (isConnected()) {
             session.close();
@@ -122,10 +141,22 @@ public class HarmonyClient {
         }
     }
 
+    /**
+     * Is there an active connection to a HarmonyHub
+     *
+     * @return is connected or not
+     */
     public boolean isConnected() {
         return session != null && session.isOpen();
     }
 
+    /**
+     * Queries a HarmmonyHub for its discovery information
+     *
+     * @param host host or IP to query
+     * @return {@link Discovery}
+     * @throws IOException if unable to communicate to host
+     */
     public Discovery getDiscoveryFromHost(String host) throws IOException {
         URI uri;
         try {
@@ -156,10 +187,20 @@ public class HarmonyClient {
         }
     }
 
+    /**
+     * Sends a ping message to a HarmonyHub
+     *
+     * @return {@link CompletableFuture}
+     */
     public CompletableFuture<?> sendPing() {
         return sendMessage(new PingMessage.PingRequestMessage());
     }
 
+    /**
+     * Get the current running activity
+     *
+     * @return {@link CompletableFuture}
+     */
     public CompletableFuture<Activity> getCurrentActivity() {
         final CompletableFuture<Activity> future = new CompletableFuture<Activity>();
         if (this.currentActivity == null) {
@@ -174,6 +215,13 @@ public class HarmonyClient {
         return future;
     }
 
+    /**
+     * Starts an activity by it's numeric ID
+     *
+     * @param activityId numeric ID of the activity
+     * @return {@link CompletableFuture}
+     * @throws IllegalArgumentException if activity does not exist
+     */
     public CompletableFuture<?> startActivity(int activityId) throws IllegalArgumentException {
         if (cachedConfig != null) {
             if (cachedConfig.getActivityById(activityId) == null) {
@@ -186,6 +234,13 @@ public class HarmonyClient {
 
     }
 
+    /**
+     * Starts and activity by it's string label/name
+     *
+     * @param label string name or label of the activity
+     * @return {@link CompletableFuture}
+     * @throws IllegalArgumentException if activity does not exist
+     */
     public CompletableFuture<?> startActivityByName(String label) throws IllegalArgumentException {
         if (cachedConfig != null) {
             Activity activity = cachedConfig.getActivityByName(label);
@@ -201,8 +256,8 @@ public class HarmonyClient {
     /**
      * Sends a button press command to a device in the current activity that is is registered to handle the command
      *
-     * @param buttonName
-     * @return
+     * @param buttonName name of the button to press
+     * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButtonCurrentActivity(String buttonName) {
         return pressButtonCurrentActivity(buttonName, 200);
@@ -211,9 +266,9 @@ public class HarmonyClient {
     /**
      * Sends a button press command to a device in the current activity that is is registered to handle the command
      *
-     * @param buttonName
-     * @param timeMillis
-     * @return
+     * @param buttonName name of the button to press
+     * @param timeMillis time in milliseconds to hold the press for
+     * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButtonCurrentActivity(String buttonName, int timeMillis) {
         final CompletableFuture<?> future = new CompletableFuture<>();
@@ -246,10 +301,10 @@ public class HarmonyClient {
     /**
      * Sends a button press command to a device, depressed for a given time
      *
-     * @param deviceId
-     * @param button
-     * @param timeMillis
-     * @return
+     * @param deviceId   numeric ID of the button to press
+     * @param button     string name or label of the button to press
+     * @param timeMillis time in milliseconds to hold the press for
+     * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButton(int deviceId, String button, int timeMillis) {
         final CompletableFuture<?> future = new CompletableFuture<>();
@@ -277,9 +332,9 @@ public class HarmonyClient {
     /**
      * Sends a button press command to a device, depressed for 200ms
      *
-     * @param deviceId
-     * @param button
-     * @return
+     * @param deviceId numeric ID of the device
+     * @param button   string name or label of the button to press
+     * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButton(int deviceId, String button) {
         return pressButton(deviceId, button, 200);
@@ -288,9 +343,9 @@ public class HarmonyClient {
     /**
      * Sends a button press command to a device, depressed for 200ms
      *
-     * @param deviceName
-     * @param button
-     * @return
+     * @param deviceName string name or label of the device
+     * @param button     string name or label of the button
+     * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButton(String deviceName, String button) {
         Device device = cachedConfig.getDeviceByName(deviceName);
@@ -303,10 +358,10 @@ public class HarmonyClient {
     /**
      * Sends a button press command to a device, depressed for a given time
      *
-     * @param deviceName
-     * @param button
-     * @param timeMillis
-     * @return
+     * @param deviceName string name or label of the device
+     * @param button     string name or label of the button
+     * @param pressTime  time in milliseconds to hold the button for
+     * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButton(String deviceName, String button, int pressTime) {
         Device device = cachedConfig.getDeviceByName(deviceName);
@@ -316,6 +371,11 @@ public class HarmonyClient {
         return pressButton(device.getId(), button, pressTime);
     }
 
+    /**
+     * Gets the current configuration for a HarmonyHub
+     *
+     * @return {@link CompletableFuture}
+     */
     public CompletableFuture<HarmonyConfig> getConfig() {
         final CompletableFuture<HarmonyConfig> future = new CompletableFuture<HarmonyConfig>();
         if (cachedConfig != null) {
