@@ -1,4 +1,4 @@
-package com.digitaldan.harmony;
+package com.digitaldan.harmony.shell;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -13,10 +13,11 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.digitaldan.harmony.HarmonyClient;
+import com.digitaldan.harmony.HarmonyClientListener;
 import com.digitaldan.harmony.config.Activity;
 import com.digitaldan.harmony.config.Activity.Status;
 import com.digitaldan.harmony.config.HarmonyConfig;
-import com.digitaldan.harmony.shell.ShellCommandWrapper;
 import com.martiansoftware.jsap.CommandLineTokenizer;
 
 /**

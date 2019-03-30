@@ -1,0 +1,16 @@
+Bundle-SymbolicName: ${project.groupId}.${project.artifactId}
+Bundle-Name: ${project.name}
+Bundle-Description: ${project.description}
+Bundle-ContactAddress: ${project.url}
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8
+
+Import-Package:\
+    !com.martiansoftware.jsap,\
+    !org.kohsuke.*,\
+    *
+
+-removeheaders: Private-Package
+
+-exportcontents:\
+    com.digitaldan.harmony,\
+    com.digitaldan.harmony.config
