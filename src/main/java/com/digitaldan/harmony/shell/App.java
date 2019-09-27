@@ -8,6 +8,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.jetty.client.HttpClient;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
@@ -39,7 +40,8 @@ public class App implements HarmonyClientListener {
 
     public App(String host) throws IOException {
         try {
-            hc = new HarmonyClient();
+            HttpClient httpClient = new HttpClient();
+            hc = new HarmonyClient(httpClient);
             hc.addListener(this);
             hc.connect(host);
 
