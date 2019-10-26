@@ -66,14 +66,13 @@ public class HarmonyClient {
     private Activity currentActivity;
     private long connectedTime = System.currentTimeMillis();
     private HttpClient httpClient;
-    private ScheduledExecutorService timeoutService;;
+    private ScheduledExecutorService timeoutService;
 
     /*
      * Public Methods
      */
-
-    public HarmonyClient() {
-        httpClient = new HttpClient();
+    public HarmonyClient(HttpClient httpClient) {
+        this.httpClient = httpClient;
         timeoutService = Executors.newSingleThreadScheduledExecutor();
     }
 
@@ -132,12 +131,6 @@ public class HarmonyClient {
     public void disconnect() {
         if (isConnected()) {
             session.close();
-        }
-        if (httpClient.isStarted()) {
-            try {
-                httpClient.stop();
-            } catch (Exception ignored) {
-            }
         }
     }
 
@@ -301,8 +294,8 @@ public class HarmonyClient {
     /**
      * Sends a button press command to a device, depressed for a given time
      *
-     * @param deviceId   numeric ID of the button to press
-     * @param button     string name or label of the button to press
+     * @param deviceId numeric ID of the button to press
+     * @param button string name or label of the button to press
      * @param timeMillis time in milliseconds to hold the press for
      * @return {@link CompletableFuture}
      */
@@ -333,7 +326,7 @@ public class HarmonyClient {
      * Sends a button press command to a device, depressed for 200ms
      *
      * @param deviceId numeric ID of the device
-     * @param button   string name or label of the button to press
+     * @param button string name or label of the button to press
      * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButton(int deviceId, String button) {
@@ -344,7 +337,7 @@ public class HarmonyClient {
      * Sends a button press command to a device, depressed for 200ms
      *
      * @param deviceName string name or label of the device
-     * @param button     string name or label of the button
+     * @param button string name or label of the button
      * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButton(String deviceName, String button) {
@@ -359,8 +352,8 @@ public class HarmonyClient {
      * Sends a button press command to a device, depressed for a given time
      *
      * @param deviceName string name or label of the device
-     * @param button     string name or label of the button
-     * @param pressTime  time in milliseconds to hold the button for
+     * @param button string name or label of the button
+     * @param pressTime time in milliseconds to hold the button for
      * @return {@link CompletableFuture}
      */
     public CompletableFuture<?> pressButton(String deviceName, String button, int pressTime) {
