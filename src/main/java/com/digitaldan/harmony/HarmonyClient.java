@@ -36,6 +36,7 @@ import com.digitaldan.harmony.config.Device;
 import com.digitaldan.harmony.config.Discovery;
 import com.digitaldan.harmony.config.Function;
 import com.digitaldan.harmony.config.HarmonyConfig;
+import com.digitaldan.harmony.config.Ping;
 import com.digitaldan.harmony.messages.ActivityFinishedMessage;
 import com.digitaldan.harmony.messages.ConfigMessage;
 import com.digitaldan.harmony.messages.DigestMessage;
@@ -185,8 +186,15 @@ public class HarmonyClient {
      *
      * @return {@link CompletableFuture}
      */
-    public CompletableFuture<?> sendPing() {
-        return sendMessage(new PingMessage.PingRequestMessage());
+    public CompletableFuture<Ping> sendPing() {
+        final CompletableFuture<Ping> future = new CompletableFuture<Ping>();
+        sendMessage(new PingMessage.PingRequestMessage()).thenAccept(m -> {
+            future.complete(((PingMessage.PingResponseMessage) m).getPing());
+        }).exceptionally(e -> {
+            future.completeExceptionally(e);
+            return null;
+        });
+        return future;
     }
 
     /**
