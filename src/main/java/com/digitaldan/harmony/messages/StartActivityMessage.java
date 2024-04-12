@@ -10,11 +10,11 @@ public class StartActivityMessage {
 
         HashMap<String, Object> params = new HashMap<>();
 
-        public StartActivityRequestMessage(int activityId, long timeStamp) {
+        public StartActivityRequestMessage(String activityId, long timeStamp) {
             super(MIME_TYPE);
             HashMap<String, Object> args = new HashMap<>();
             args.put("rule", "start");
-            params.put("activityId", String.valueOf(activityId));
+            params.put("activityId", activityId);
             params.put("timeStamp", timeStamp);
             params.put("args", args);
         }

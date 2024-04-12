@@ -206,7 +206,7 @@ public class HarmonyClient {
         final CompletableFuture<Activity> future = new CompletableFuture<Activity>();
         if (this.currentActivity == null) {
             sendMessage(new GetCurrentActivityMessage.GetCurrentActivityRequestMessage()).thenAccept(m -> {
-                int activityId = ((GetCurrentActivityMessage.GetCurrentActivityResponseMessage) m).getActivityId();
+                String activityId = ((GetCurrentActivityMessage.GetCurrentActivityResponseMessage) m).getActivityId();
                 this.currentActivity = this.cachedConfig.getActivityById(activityId);
                 future.complete(this.currentActivity);
             });
@@ -223,10 +223,10 @@ public class HarmonyClient {
      * @return {@link CompletableFuture}
      * @throws IllegalArgumentException if activity does not exist
      */
-    public CompletableFuture<?> startActivity(int activityId) throws IllegalArgumentException {
+    public CompletableFuture<?> startActivity(String activityId) throws IllegalArgumentException {
         if (cachedConfig != null) {
             if (cachedConfig.getActivityById(activityId) == null) {
-                throw new IllegalArgumentException(String.format("Unknown activity '%d'", activityId));
+                throw new IllegalArgumentException(String.format("Unknown activity '%s'", activityId));
             }
             return sendMessage(new StartActivityMessage.StartActivityRequestMessage(activityId,
                     System.currentTimeMillis() - connectedTime));

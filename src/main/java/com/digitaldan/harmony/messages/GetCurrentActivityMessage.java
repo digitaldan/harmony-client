@@ -33,12 +33,8 @@ public class GetCurrentActivityMessage {
             super(code, id, msg);
         }
 
-        public int getActivityId() {
-            try {
-                return Integer.parseInt(currentActivityResult.result);
-            } catch (Exception e) {
-                return -1;
-            }
+        public String getActivityId() {
+            return currentActivityResult.result;
         }
 
         private class CurrentActivityResult {
