@@ -11,8 +11,8 @@ public class StartActivityCommand extends ShellCommand {
     @Override
     public void execute(HarmonyClient harmonyClient) {
         try {
-            harmonyClient.startActivity(Integer.parseInt(activity));
-        } catch (NumberFormatException e) {
+            harmonyClient.startActivity(activity);
+        } catch (IllegalArgumentException e) {
             harmonyClient.startActivityByName(activity);
         }
         println("Activity %s started", activity);

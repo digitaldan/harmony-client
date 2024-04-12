@@ -4,7 +4,6 @@ Logitech Harmony WebSocket Client
 
 License EPL v2.0
 
-[![TravisCI Build Status](https://travis-ci.org/digitaldan/harmony-client.svg?branch=master)](https://travis-ci.org/digitaldan/harmony-client)
 # Running
 
 `mvn clean compile assembly:single`

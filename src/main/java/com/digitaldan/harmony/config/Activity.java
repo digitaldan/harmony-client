@@ -12,7 +12,7 @@ import com.google.gson.annotations.SerializedName;
 public class Activity {
     private String label;
     private String suggestedDisplay;
-    private Integer id;
+    private String id;
     private String activityTypeDisplayName;
     private List<ControlGroup> controlGroup = new ArrayList<>();
     private Integer activityOrder;
@@ -56,11 +56,11 @@ public class Activity {
         this.suggestedDisplay = suggestedDisplay;
     }
 
-    public Integer getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -130,6 +130,6 @@ public class Activity {
 
     @Override
     public String toString() {
-        return format("Activity[%d]:%s", getId(), getLabel());
+        return format("Activity[%s]:%s", getId(), getLabel());
     }
 }

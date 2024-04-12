@@ -50,14 +50,8 @@ public class DigestMessage extends Message {
         private Integer configVersion;
         private String accountId;
 
-        public Integer getActivityId() {
-            if (activityId != null) {
-                try {
-                    return Integer.parseInt(activityId);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-            return null;
+        public String getActivityId() {
+            return activityId;
         }
 
         public Status getActivityStatus() {

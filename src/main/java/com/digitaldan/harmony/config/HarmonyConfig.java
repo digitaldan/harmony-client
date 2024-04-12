@@ -66,9 +66,9 @@ public class HarmonyConfig {
         this.global = global;
     }
 
-    public Activity getActivityById(int result) {
+    public Activity getActivityById(String result) {
         for (Activity activity : activities) {
-            if (activity.getId() == result) {
+            if (activity.getId().equals(result)) {
                 return activity;
             }
         }

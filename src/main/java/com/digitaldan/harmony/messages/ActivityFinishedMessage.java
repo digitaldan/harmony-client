@@ -17,7 +17,7 @@ public class ActivityFinishedMessage extends Message {
     }
 
     public static class ActivityFinished {
-        Integer activityId;
+        String activityId;
         Integer errorCode;
         String errorString;
 
@@ -25,7 +25,7 @@ public class ActivityFinishedMessage extends Message {
 
         }
 
-        public Integer getActivityId() {
+        public String getActivityId() {
             return activityId;
         }
 
