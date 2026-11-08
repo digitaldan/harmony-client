@@ -3,6 +3,7 @@ package com.digitaldan.harmony;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -16,14 +17,13 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
-import org.eclipse.jetty.client.api.ContentResponse;
-import org.eclipse.jetty.client.api.Request;
-import org.eclipse.jetty.client.util.StringContentProvider;
+import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.StringRequestContent;
 import org.eclipse.jetty.http.HttpHeader;
+import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.WebSocketListener;
-import org.eclipse.jetty.websocket.api.WriteCallback;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -162,9 +162,11 @@ public class HarmonyClient {
         Request request = httpClient.POST(uri);
 
         logger.trace("Sending {}", drm.toJSON());
-        request.content(new StringContentProvider(drm.toJSON()), "application/json");
-        request.header(HttpHeader.ORIGIN, "http://sl.dhg.myharmony.com");
-        request.header(HttpHeader.ACCEPT, "text/plain");
+        request.body(new StringRequestContent("application/json", drm.toJSON()));
+        request.headers(headers -> {
+            headers.put(HttpHeader.ORIGIN, "http://sl.dhg.myharmony.com");
+            headers.put(HttpHeader.ACCEPT, "text/plain");
+        });
 
         try {
             ContentResponse response = request.send();
@@ -413,20 +415,12 @@ public class HarmonyClient {
         String json = message.toJson();
 
         logger.debug("Sending: {}", json);
-        session.getRemote().sendString(json, new WriteCallback() {
-            @Override
-            public void writeSuccess() {
-                logger.trace("writeSuccess for id {}", id);
-                responseFutures.put(id, future);
-                // TODO we need to remove these timeouts when responses are handled normally
-                scheduleTimeout(message.getId());
-            }
-
-            @Override
-            public void writeFailed(Throwable t) {
-                future.completeExceptionally(t);
-            }
-        });
+        session.sendText(json, Callback.from(() -> {
+            logger.trace("writeSuccess for id {}", id);
+            responseFutures.put(id, future);
+            // TODO we need to remove these timeouts when responses are handled normally
+            scheduleTimeout(message.getId());
+        }, future::completeExceptionally));
         return future;
     }
 
@@ -438,18 +432,10 @@ public class HarmonyClient {
         String json = message.toJson();
 
         logger.debug("Sending: {}", json);
-        session.getRemote().sendString(json, new WriteCallback() {
-            @Override
-            public void writeSuccess() {
-                logger.trace("writeSuccess for message {}", message.getId());
-                future.complete(null);
-            }
-
-            @Override
-            public void writeFailed(Throwable t) {
-                future.completeExceptionally(t);
-            }
-        });
+        session.sendText(json, Callback.from(() -> {
+            logger.trace("writeSuccess for message {}", message.getId());
+            future.complete(null);
+        }, future::completeExceptionally));
         return future;
     }
 
@@ -462,7 +448,7 @@ public class HarmonyClient {
         }
 
         client = new WebSocketClient(httpClient);
-        client.getPolicy().setMaxTextMessageSize(ONE_MB);
+        client.setMaxTextMessageSize(ONE_MB);
 
         try {
             client.start();
@@ -475,7 +461,7 @@ public class HarmonyClient {
         client.connect(new MyWebSocketListener(), uri);
     }
 
-    private class MyWebSocketListener implements WebSocketListener {
+    private class MyWebSocketListener implements Session.Listener.AutoDemanding {
         @Override
         public void onWebSocketClose(int code, String reason) {
             logger.debug("onWebSocketClose {} {}", code, reason);
@@ -483,7 +469,7 @@ public class HarmonyClient {
         }
 
         @Override
-        public void onWebSocketConnect(Session wssession) {
+        public void onWebSocketOpen(Session wssession) {
             logger.debug("onWebSocketConnect {}", wssession);
             connectedTime = System.currentTimeMillis();
             session = wssession;
@@ -508,8 +494,9 @@ public class HarmonyClient {
         }
 
         @Override
-        public void onWebSocketBinary(byte[] data, int offset, int len) {
-            logger.trace("onWebSocketBinary {} {} {}", data, offset, len);
+        public void onWebSocketBinary(ByteBuffer payload, Callback callback) {
+            logger.trace("onWebSocketBinary {}", payload);
+            callback.succeed();
         }
 
         @Override
