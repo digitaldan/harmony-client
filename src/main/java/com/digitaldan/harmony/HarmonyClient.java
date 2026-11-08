@@ -461,11 +461,13 @@ public class HarmonyClient {
         client.connect(new MyWebSocketListener(), uri);
     }
 
-    private class MyWebSocketListener implements Session.Listener.AutoDemanding {
+    // Must be public. Jetty 12 can't call listener methods on a non-public class.
+    public class MyWebSocketListener implements Session.Listener.AutoDemanding {
         @Override
-        public void onWebSocketClose(int code, String reason) {
+        public void onWebSocketClose(int code, String reason, Callback callback) {
             logger.debug("onWebSocketClose {} {}", code, reason);
             hubDisconected(reason);
+            callback.succeed();
         }
 
         @Override
